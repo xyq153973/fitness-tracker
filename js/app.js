@@ -7,6 +7,7 @@
         userId: null,
         userData: null,
         records: [],
+        nickname: '小可爱', // 默认昵称
         settings: {
             height: null,
             targetWeight: null,
@@ -24,6 +25,33 @@
         weightChart: null,
         exerciseChart: null
     };
+
+    // ==================== 搞怪风每日一句 ====================
+    const dailyQuotes = [
+        '再不运动，肉肉就要占领地球了！😱',
+        '你的马甲线正在角落里默默哭泣...',
+        '脂肪说：今天又没运动，我安心了～',
+        '动起来！别让脂肪太嚣张！😤',
+        '每运动一分钟，就离女神近一步！',
+        '躺平很舒服，但瘦下来更爽！',
+        '今天不动，明天肉痛！',
+        '你的自律，是脂肪最大的敌人！👊',
+        '运动一时累，不运动一直胖，选吧！',
+        '脂肪：你不动，我就长！哼～',
+        '今天的汗水，是明天的笑容（和马甲线）！',
+        '别找借口了，脂肪不会等你准备好！',
+        '运动是最好的医美，省钱又有效！',
+        '你的坚持，会让脂肪绝望！',
+        '每次想放弃时，想想镜子里瘦下来的自己！✨'
+    ];
+
+    // 获取随机每日一句
+    function getDailyQuote() {
+        const today = getToday();
+        // 用日期作为随机种子，同一天显示同一句
+        const index = today.split('-').reduce((a, b) => parseInt(a) + parseInt(b)) % dailyQuotes.length;
+        return dailyQuotes[index];
+    }
 
     // ==================== 工具函数 ====================
     function formatDate(date) {
@@ -82,6 +110,7 @@
                 state.userData = doc.data();
                 state.settings = { ...state.settings, ...state.userData.settings };
                 state.streak = { ...state.streak, ...state.userData.streak };
+                state.nickname = state.userData.nickname || '小可爱';
                 
                 // 加载记录
                 const recordsSnapshot = await db.collection('users').doc(state.userId)
@@ -140,11 +169,26 @@
 
     // ==================== Dashboard 初始化 ====================
     async function initDashboard() {
+        updatePageTitle();
+        updateDailyQuote();
         updateProgress();
         updateStreak();
         updateTodayStatus();
         updateWeekStats();
         initWeightChart();
+    }
+
+    // 更新页面标题和头部
+    function updatePageTitle() {
+        const name = state.nickname;
+        document.getElementById('page-title').textContent = `${name} 的瘦身日记 ✨`;
+        document.getElementById('header-title').textContent = `${name} 的瘦身日记`;
+    }
+
+    // 更新每日一句
+    function updateDailyQuote() {
+        const quote = getDailyQuote();
+        document.getElementById('quote-text').textContent = quote;
     }
 
     function updateProgress() {
@@ -195,16 +239,17 @@
     }
 
     function getStreakMessage(streak, isTodayChecked) {
+        const name = state.nickname;
         if (!isTodayChecked) {
-            if (streak === 0) return '开始你的打卡之旅吧！';
-            return '今天还没打卡，连续记录会中断哦！';
+            if (streak === 0) return `${name}，开始你的打卡之旅吧！别让脂肪太嚣张！`;
+            return `${name}，今天还没打卡，脂肪正在偷笑呢！`;
         }
 
-        if (streak < 3) return '加油，坚持就是胜利！';
-        if (streak < 7) return '太棒了，习惯正在养成！';
-        if (streak < 14) return '厉害，已经坚持一周多了！';
-        if (streak < 30) return '了不起，你已超过80%的人！';
-        return '超级厉害，习惯已经养成！🎉';
+        if (streak < 3) return `${name}，坚持住！脂肪已经开始慌了！`;
+        if (streak < 7) return `${name}，太棒了！脂肪正在瑟瑟发抖！`;
+        if (streak < 14) return `${name}，厉害了！脂肪已经打包准备跑路了！`;
+        if (streak < 30) return `${name}，你已超过80%的人！脂肪彻底绝望！`;
+        return `${name}，你是自律王者！脂肪已经放弃抵抗！🎉`;
     }
 
     function updateTodayStatus() {
@@ -212,6 +257,7 @@
         const todayRecords = state.records.filter(r => r.date === today);
         const statusEl = document.getElementById('today-status');
         const checkinBtn = document.getElementById('checkin-btn');
+        const name = state.nickname;
 
         // 统计今天的运动数据
         let totalDuration = 0;
@@ -230,9 +276,15 @@
 
         if (todayRecords.length > 0) {
             statusEl.className = 'today-status checked';
+            let message = '';
+            if (todayRecords.length === 1) {
+                message = `${name} 今天动了，脂肪很受伤！`;
+            } else {
+                message = `${name} 今天动了 ${todayRecords.length} 次，脂肪已崩溃！`;
+            }
             statusEl.innerHTML = `
                 <span class="status-icon">✅</span>
-                <span class="status-text">今日已打卡 ${todayRecords.length} 次</span>
+                <span class="status-text">${message}</span>
                 <div class="today-detail">
                     ${exerciseCount > 0 ? `运动 ${exerciseCount} 项，共 ${totalDuration} 分钟` : ''}
                     ${exerciseTypes.size > 0 ? ` (${[...exerciseTypes].join('、')})` : ''}
@@ -242,7 +294,7 @@
             statusEl.className = 'today-status unchecked';
             statusEl.innerHTML = `
                 <span class="status-icon">⚠️</span>
-                <span class="status-text">今天还没打卡哦</span>
+                <span class="status-text">${name}，今天还没动，脂肪在偷笑！</span>
             `;
         }
         
@@ -292,6 +344,10 @@
         const hasData = weightData.some(w => w !== null);
         if (!hasData) {
             chartEmpty.classList.add('show');
+            chartEmpty.innerHTML = `
+                <span class="empty-icon">📈</span>
+                <span class="empty-text">${state.nickname}，打卡后就能看到趋势啦～</span>
+            `;
             return;
         }
         chartEmpty.classList.remove('show');
@@ -496,7 +552,14 @@
             await updateStreakAfterCheckin();
 
             hideCheckinModal();
-            showToast('打卡成功！🎉');
+            // 搞怪风打卡成功提示
+            const successMessages = [
+                `${state.nickname} 又变美了一点点！✨`,
+                `${state.nickname} 真的超级自律！🎉`,
+                `太棒了！${state.nickname} 离目标更近了！💪`,
+                `${state.nickname}，脂肪正在瑟瑟发抖！`
+            ];
+            showToast(successMessages[Math.floor(Math.random() * successMessages.length)]);
 
             // 刷新页面
             await initDashboard();
@@ -538,6 +601,7 @@
         const initialWeight = state.userData?.initialWeight;
         const currentWeight = getCurrentWeight();
         const weightLost = initialWeight && currentWeight ? initialWeight - currentWeight : 0;
+        const name = state.nickname;
 
         // 连续打卡里程碑
         const streakMilestones = [7, 14, 30, 60, 100];
@@ -549,13 +613,28 @@
             !state.userData?.achievedWeightMilestones?.includes(m));
 
         if (streakMilestone) {
-            showMilestone('🎉', `连续打卡 ${streakMilestone} 天！`, '太厉害了，继续保持！');
+            const milestoneMessages = {
+                7: { title: `${name} 太厉害了！`, msg: `连续打卡 7 天！脂肪已经开始害怕你了！` },
+                14: { title: `${name} 真的很强！`, msg: `连续打卡 14 天！脂肪正在打包跑路！` },
+                30: { title: `${name} 是自律王者！`, msg: `连续打卡 30 天！习惯已经刻进 DNA 了！` },
+                60: { title: `${name} 简直无敌！`, msg: `连续打卡 60 天！脂肪已经放弃抵抗！` },
+                100: { title: `${name} 是传说！`, msg: `连续打卡 100 天！你就是健身界的神话！` }
+            };
+            const { title, msg } = milestoneMessages[streakMilestone];
+            showMilestone('🎉', title, msg);
             // 记录已达成
             saveUserData({ 
                 achievedStreakMilestones: firebase.firestore.FieldValue.arrayUnion(streakMilestone) 
             });
         } else if (weightMilestone) {
-            showMilestone('🏆', `成功减重 ${weightMilestone} kg！`, '你的努力有了回报！');
+            const weightMessages = {
+                1: { title: `${name} 初战告捷！`, msg: `成功减重 1kg！脂肪开始慌了！` },
+                3: { title: `${name} 越来越美了！`, msg: `成功减重 3kg！镜子里的你不一样了！` },
+                5: { title: `${name} 蜕变成功！`, msg: `成功减重 5kg！你简直是励志典范！` },
+                10: { title: `${name} 是女神！`, msg: `成功减重 10kg！你就是行走的励志书！` }
+            };
+            const { title, msg } = weightMessages[weightMilestone];
+            showMilestone('🏆', title, msg);
             saveUserData({ 
                 achievedWeightMilestones: firebase.firestore.FieldValue.arrayUnion(weightMilestone) 
             });
@@ -581,6 +660,10 @@
         if (state.records.length === 0) {
             historyList.innerHTML = '';
             emptyState.classList.add('show');
+            emptyState.innerHTML = `
+                <span class="empty-icon">📝</span>
+                <span class="empty-text">${state.nickname} 还没有打卡记录，开始第一次吧！</span>
+            `;
             return;
         }
 
@@ -754,6 +837,7 @@
 
     // ==================== 设置页面 ====================
     function renderSettings() {
+        document.getElementById('settings-nickname').value = state.nickname || '';
         document.getElementById('settings-height').value = state.settings.height || '';
         document.getElementById('settings-current-weight').value = getCurrentWeight() || '';
         document.getElementById('settings-waist').value = state.userData?.currentWaist || '';
@@ -764,6 +848,19 @@
         document.getElementById('settings-min-duration').value = state.settings.minDuration || 30;
         document.getElementById('settings-weekly-duration').value = state.settings.weeklyDuration || 150;
     }
+
+    window.saveNickname = async function() {
+        const nickname = document.getElementById('settings-nickname').value.trim();
+        if (!nickname) {
+            showToast('请输入昵称');
+            return;
+        }
+        state.nickname = nickname;
+        await saveUserData({ nickname: nickname });
+        updatePageTitle();
+        showToast('昵称已保存');
+        await initDashboard();
+    };
 
     window.saveSettings = async function() {
         const targetWeight = parseFloat(document.getElementById('settings-target-weight').value);
@@ -911,6 +1008,7 @@
     // ==================== 应用初始化 ====================
     async function initApp() {
         const loadingPage = document.getElementById('loading-page');
+        const loadingText = loadingPage.querySelector('.loading-text');
         
         try {
             // 尝试从 localStorage 获取已保存的 userId
@@ -930,8 +1028,13 @@
             // 加载用户数据
             await loadUserData();
 
+            // 更新加载文字
+            loadingText.textContent = `${state.nickname} 准备好了！`;
+            
             // 隐藏加载页面
-            loadingPage.classList.add('hidden');
+            setTimeout(() => {
+                loadingPage.classList.add('hidden');
+            }, 300);
             
             // 直接进入主页，不再显示初始化页面
             showPage('dashboard-page');
