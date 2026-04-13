@@ -910,6 +910,8 @@
 
     // ==================== 应用初始化 ====================
     async function initApp() {
+        const loadingPage = document.getElementById('loading-page');
+        
         try {
             // 尝试从 localStorage 获取已保存的 userId
             let savedUserId = localStorage.getItem('fitness_tracker_user_id');
@@ -928,11 +930,15 @@
             // 加载用户数据
             await loadUserData();
 
+            // 隐藏加载页面
+            loadingPage.classList.add('hidden');
+            
             // 直接进入主页，不再显示初始化页面
             showPage('dashboard-page');
             await initDashboard();
         } catch (error) {
             console.error('初始化失败:', error);
+            loadingPage.classList.add('hidden');
             showToast('初始化失败，请刷新页面');
         }
     }
