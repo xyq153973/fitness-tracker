@@ -311,6 +311,30 @@ html, body {
     flex: 1;
 }
 
+/* 每日一句卡片 */
+.daily-quote-card {
+    background: linear-gradient(135deg, #FFE4EC 0%, #FFF0F5 100%);
+    border-radius: var(--border-radius);
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: var(--shadow-sm);
+}
+
+.quote-icon {
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.quote-text {
+    font-size: 14px;
+    color: var(--text-primary);
+    line-height: 1.5;
+    font-weight: 500;
+}
+
 /* 目标进度卡片 */
 .progress-card {
     background: linear-gradient(135deg, #FFF5F8 0%, #FFE4EC 100%);
