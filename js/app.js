@@ -209,27 +209,46 @@
 
     function updateTodayStatus() {
         const today = getToday();
-        const todayRecord = state.records.find(r => r.date === today);
+        const todayRecords = state.records.filter(r => r.date === today);
         const statusEl = document.getElementById('today-status');
         const checkinBtn = document.getElementById('checkin-btn');
 
-        if (todayRecord) {
+        // 统计今天的运动数据
+        let totalDuration = 0;
+        let exerciseCount = 0;
+        const exerciseTypes = new Set();
+        
+        todayRecords.forEach(record => {
+            if (record.exercises) {
+                record.exercises.forEach(ex => {
+                    totalDuration += ex.duration || 0;
+                    exerciseCount++;
+                    if (ex.category) exerciseTypes.add(ex.category);
+                });
+            }
+        });
+
+        if (todayRecords.length > 0) {
             statusEl.className = 'today-status checked';
             statusEl.innerHTML = `
                 <span class="status-icon">✅</span>
-                <span class="status-text">今日已打卡</span>
+                <span class="status-text">今日已打卡 ${todayRecords.length} 次</span>
+                <div class="today-detail">
+                    ${exerciseCount > 0 ? `运动 ${exerciseCount} 项，共 ${totalDuration} 分钟` : ''}
+                    ${exerciseTypes.size > 0 ? ` (${[...exerciseTypes].join('、')})` : ''}
+                </div>
             `;
-            checkinBtn.classList.add('disabled');
-            checkinBtn.onclick = null;
         } else {
             statusEl.className = 'today-status unchecked';
             statusEl.innerHTML = `
                 <span class="status-icon">⚠️</span>
                 <span class="status-text">今天还没打卡哦</span>
             `;
-            checkinBtn.classList.remove('disabled');
-            checkinBtn.onclick = showCheckinModal;
         }
+        
+        // 打卡按钮始终可用，支持多次打卡
+        checkinBtn.classList.remove('disabled');
+        checkinBtn.onclick = showCheckinModal;
     }
 
     function updateWeekStats() {
@@ -494,11 +513,16 @@
         const today = getToday();
         const yesterday = formatDate(new Date(Date.now() - 86400000));
         
+        // 如果今天已经打卡过，不更新连续天数（支持一天多次打卡）
+        if (state.streak.lastDate === today) {
+            return;
+        }
+        
         if (state.streak.lastDate === yesterday) {
             // 连续打卡
             state.streak.current++;
-        } else if (state.streak.lastDate !== today) {
-            // 中断了，重新开始
+        } else {
+            // 中断了或第一次打卡，重新开始
             state.streak.current = 1;
         }
         
