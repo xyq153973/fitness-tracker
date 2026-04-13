@@ -14,8 +14,19 @@ const firebaseConfig = {
 // 初始化 Firebase
 firebase.initializeApp(firebaseConfig);
 
-// 获取 Firestore 和 Auth 实例
+// 获取 Firestore 实例并启用离线持久化
 const db = firebase.firestore();
+
+// 启用离线持久化（让应用在网络不好时也能工作）
+db.enablePersistence({ synchronizeTabs: true })
+    .catch(err => {
+        if (err.code === 'failed-precondition') {
+            console.warn('多个标签页打开，离线持久化可能不可用');
+        } else if (err.code === 'unimplemented') {
+            console.warn('浏览器不支持离线持久化');
+        }
+    });
+
 const auth = firebase.auth();
 
 // 使用匿名登录
