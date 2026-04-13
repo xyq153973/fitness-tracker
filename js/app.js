@@ -919,9 +919,19 @@
     // ==================== 应用初始化 ====================
     async function initApp() {
         try {
-            // 匿名登录
-            await firebaseAuth.signInAnonymously();
-            state.userId = firebaseAuth.getUserId();
+            // 尝试从 localStorage 获取已保存的 userId
+            let savedUserId = localStorage.getItem('fitness_tracker_user_id');
+            
+            if (savedUserId) {
+                // 使用已保存的 userId
+                state.userId = savedUserId;
+            } else {
+                // 匿名登录获取新的 userId
+                await firebaseAuth.signInAnonymously();
+                state.userId = firebaseAuth.getUserId();
+                // 保存到 localStorage
+                localStorage.setItem('fitness_tracker_user_id', state.userId);
+            }
 
             // 加载用户数据
             await loadUserData();
