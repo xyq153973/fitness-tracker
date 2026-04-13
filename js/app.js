@@ -91,11 +91,52 @@
         }, 2500);
     }
 
+    // ==================== 本地缓存 ====================
+    const CACHE_KEY = 'fitness_tracker_cache';
+    
+    // 保存数据到本地缓存
+    function saveToCache() {
+        const cacheData = {
+            nickname: state.nickname,
+            settings: state.settings,
+            streak: state.streak,
+            userData: state.userData,
+            records: state.records.slice(0, 100), // 只缓存最近100条记录
+            cacheTime: Date.now()
+        };
+        try {
+            localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+        } catch (e) {
+            console.warn('缓存保存失败:', e);
+        }
+    }
+    
+    // 从本地缓存加载数据
+    function loadFromCache() {
+        try {
+            const cached = localStorage.getItem(CACHE_KEY);
+            if (cached) {
+                const data = JSON.parse(cached);
+                state.nickname = data.nickname || '小可爱';
+                state.settings = { ...state.settings, ...data.settings };
+                state.streak = { ...state.streak, ...data.streak };
+                state.userData = data.userData || null;
+                state.records = data.records || [];
+                return true;
+            }
+        } catch (e) {
+            console.warn('缓存读取失败:', e);
+        }
+        return false;
+    }
+
     // ==================== Firebase 数据操作 ====================
     async function saveUserData(data) {
         if (!state.userId) return;
         try {
             await db.collection('users').doc(state.userId).set(data, { merge: true });
+            // 保存成功后更新本地缓存
+            saveToCache();
         } catch (error) {
             console.error('保存数据失败:', error);
             showToast('保存失败，请检查网络');
@@ -114,11 +155,16 @@
                 
                 // 加载记录
                 const recordsSnapshot = await db.collection('users').doc(state.userId)
-                    .collection('records').orderBy('date', 'desc').get();
+                    .collection('records').orderBy('date', 'desc').limit(100).get();
                 state.records = recordsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                // 保存到本地缓存
+                saveToCache();
             }
+            return true;
         } catch (error) {
             console.error('加载数据失败:', error);
+            return false;
         }
     }
 
@@ -129,6 +175,8 @@
                 .collection('records').add(record);
             record.id = docRef.id;
             state.records.unshift(record);
+            // 保存到本地缓存
+            saveToCache();
         } catch (error) {
             console.error('保存记录失败:', error);
             throw error;
@@ -1010,23 +1058,51 @@
         const loadingPage = document.getElementById('loading-page');
         const loadingText = loadingPage.querySelector('.loading-text');
         
+        // 第一步：先从本地缓存加载数据，立即显示
+        const hasCache = loadFromCache();
+        if (hasCache) {
+            // 有缓存，立即显示页面
+            loadingText.textContent = `${state.nickname} 准备好了！`;
+            setTimeout(() => {
+                loadingPage.classList.add('hidden');
+            }, 100);
+            showPage('dashboard-page');
+            await initDashboard();
+            
+            // 后台同步云端数据（不阻塞显示）
+            syncFromCloud();
+        } else {
+            // 没有缓存，需要从云端加载
+            loadingText.textContent = '首次加载中...';
+            await initFromCloud(loadingPage, loadingText);
+        }
+    }
+    
+    // 从云端初始化（带重试）
+    async function initFromCloud(loadingPage, loadingText, retryCount = 0) {
+        const MAX_RETRIES = 3;
+        
         try {
             // 尝试从 localStorage 获取已保存的 userId
             let savedUserId = localStorage.getItem('fitness_tracker_user_id');
             
             if (savedUserId) {
-                // 使用已保存的 userId
                 state.userId = savedUserId;
             } else {
                 // 匿名登录获取新的 userId
                 await firebaseAuth.signInAnonymously();
                 state.userId = firebaseAuth.getUserId();
-                // 保存到 localStorage
                 localStorage.setItem('fitness_tracker_user_id', state.userId);
             }
 
             // 加载用户数据
-            await loadUserData();
+            const success = await loadUserData();
+            
+            if (!success && retryCount < MAX_RETRIES) {
+                loadingText.textContent = `加载失败，重试中... (${retryCount + 1}/${MAX_RETRIES})`;
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                return initFromCloud(loadingPage, loadingText, retryCount + 1);
+            }
 
             // 更新加载文字
             loadingText.textContent = `${state.nickname} 准备好了！`;
@@ -1034,15 +1110,64 @@
             // 隐藏加载页面
             setTimeout(() => {
                 loadingPage.classList.add('hidden');
-            }, 300);
+            }, 100);
             
-            // 直接进入主页，不再显示初始化页面
             showPage('dashboard-page');
             await initDashboard();
         } catch (error) {
             console.error('初始化失败:', error);
+            
+            if (retryCount < MAX_RETRIES) {
+                loadingText.textContent = `连接失败，重试中... (${retryCount + 1}/${MAX_RETRIES})`;
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                return initFromCloud(loadingPage, loadingText, retryCount + 1);
+            }
+            
             loadingPage.classList.add('hidden');
-            showToast('初始化失败，请刷新页面');
+            showToast('网络连接失败，请检查网络后刷新页面');
+        }
+    }
+    
+    // 后台同步云端数据
+    async function syncFromCloud() {
+        try {
+            let savedUserId = localStorage.getItem('fitness_tracker_user_id');
+            
+            if (!savedUserId) {
+                await firebaseAuth.signInAnonymously();
+                savedUserId = firebaseAuth.getUserId();
+                localStorage.setItem('fitness_tracker_user_id', savedUserId);
+            }
+            
+            state.userId = savedUserId;
+            
+            // 从云端加载数据
+            const doc = await db.collection('users').doc(state.userId).get();
+            if (doc.exists) {
+                const cloudData = doc.data();
+                state.userData = cloudData;
+                state.settings = { ...state.settings, ...cloudData.settings };
+                state.streak = { ...state.streak, ...cloudData.streak };
+                state.nickname = cloudData.nickname || '小可爱';
+                
+                // 加载记录
+                const recordsSnapshot = await db.collection('users').doc(state.userId)
+                    .collection('records').orderBy('date', 'desc').limit(100).get();
+                state.records = recordsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                // 更新本地缓存
+                saveToCache();
+                
+                // 刷新页面显示
+                updatePageTitle();
+                updateDailyQuote();
+                updateProgress();
+                updateStreak();
+                updateTodayStatus();
+                updateWeekStats();
+            }
+        } catch (error) {
+            console.warn('后台同步失败，使用本地缓存:', error);
         }
     }
 
