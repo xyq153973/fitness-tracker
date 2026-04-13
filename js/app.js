@@ -4,7 +4,6 @@
 
     // ==================== 状态管理 ====================
     const state = {
-        isInitialized: false,
         userId: null,
         userData: null,
         records: [],
@@ -83,7 +82,6 @@
                 state.userData = doc.data();
                 state.settings = { ...state.settings, ...state.userData.settings };
                 state.streak = { ...state.streak, ...state.userData.streak };
-                state.isInitialized = state.userData.isInitialized || false;
                 
                 // 加载记录
                 const recordsSnapshot = await db.collection('users').doc(state.userId)
@@ -138,58 +136,6 @@
         } else if (pageId === 'settings-page') {
             renderSettings();
         }
-    };
-
-    // ==================== 初始化 ====================
-    window.completeInit = async function() {
-        const height = parseFloat(document.getElementById('init-height').value);
-        const weight = parseFloat(document.getElementById('init-weight').value);
-        const waist = parseFloat(document.getElementById('init-waist').value) || null;
-        const hip = parseFloat(document.getElementById('init-hip').value) || null;
-        const targetWeight = parseFloat(document.getElementById('init-target-weight').value);
-        const targetDays = parseInt(document.getElementById('init-target-days').value) || 60;
-
-        // 验证必填项
-        if (!height || !weight || !targetWeight) {
-            showToast('请填写身高、当前体重和目标体重');
-            return;
-        }
-
-        if (targetWeight >= weight) {
-            showToast('目标体重应该小于当前体重哦');
-            return;
-        }
-
-        state.settings.height = height;
-        state.settings.targetWeight = targetWeight;
-        state.settings.targetDays = targetDays;
-        state.isInitialized = true;
-
-        // 保存初始数据
-        await saveUserData({
-            isInitialized: true,
-            settings: state.settings,
-            initialWeight: weight,
-            initialWaist: waist,
-            initialHip: hip,
-            initialDate: getToday()
-        });
-
-        // 创建初始记录
-        const initialRecord = {
-            date: getToday(),
-            weight: weight,
-            waist: waist,
-            hip: hip,
-            exercises: [],
-            note: '初始记录',
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        };
-        await saveRecord(initialRecord);
-
-        showToast('开始你的蜕变之旅！💪');
-        showPage('dashboard-page');
-        await initDashboard();
     };
 
     // ==================== Dashboard 初始化 ====================
@@ -784,12 +730,15 @@
 
     // ==================== 设置页面 ====================
     function renderSettings() {
+        document.getElementById('settings-height').value = state.settings.height || '';
+        document.getElementById('settings-current-weight').value = getCurrentWeight() || '';
+        document.getElementById('settings-waist').value = state.userData?.currentWaist || '';
+        document.getElementById('settings-hip').value = state.userData?.currentHip || '';
         document.getElementById('settings-target-weight').value = state.settings.targetWeight || '';
         document.getElementById('settings-target-days').value = state.settings.targetDays || 60;
         document.getElementById('settings-weekly-count').value = state.settings.weeklyCount || 4;
         document.getElementById('settings-min-duration').value = state.settings.minDuration || 30;
         document.getElementById('settings-weekly-duration').value = state.settings.weeklyDuration || 150;
-        document.getElementById('settings-height').value = state.settings.height || '';
     }
 
     window.saveSettings = async function() {
@@ -820,14 +769,33 @@
 
     window.saveBasicInfo = async function() {
         const height = parseFloat(document.getElementById('settings-height').value);
+        const currentWeight = parseFloat(document.getElementById('settings-current-weight').value);
+        const waist = parseFloat(document.getElementById('settings-waist').value) || null;
+        const hip = parseFloat(document.getElementById('settings-hip').value) || null;
+
         if (!height) {
             showToast('请填写身高');
             return;
         }
 
         state.settings.height = height;
-        await saveUserData({ settings: state.settings });
+        
+        // 如果填写了当前体重，更新初始体重
+        const updateData = { settings: state.settings };
+        if (currentWeight) {
+            if (!state.userData?.initialWeight) {
+                // 第一次设置，作为初始体重
+                updateData.initialWeight = currentWeight;
+                updateData.initialDate = getToday();
+            }
+            // 更新当前围度
+            if (waist) updateData.currentWaist = waist;
+            if (hip) updateData.currentHip = hip;
+        }
+
+        await saveUserData(updateData);
         showToast('信息已保存');
+        await initDashboard();
     };
 
     // ==================== 数据导出导入 ====================
@@ -936,14 +904,9 @@
             // 加载用户数据
             await loadUserData();
 
-            // 判断是否已初始化
-            if (state.isInitialized) {
-                showPage('dashboard-page');
-                await initDashboard();
-            } else {
-                // 显示初始化页面
-                document.getElementById('init-page').classList.add('active');
-            }
+            // 直接进入主页，不再显示初始化页面
+            showPage('dashboard-page');
+            await initDashboard();
         } catch (error) {
             console.error('初始化失败:', error);
             showToast('初始化失败，请刷新页面');
