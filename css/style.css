@@ -477,6 +477,14 @@ html, body {
 
 .today-status.checked {
     color: var(--success-color);
+    flex-direction: column;
+    gap: 4px;
+}
+
+.today-status .today-detail {
+    font-size: 13px;
+    color: #888;
+    font-weight: 400;
 }
 
 /* 打卡按钮 */
