@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>瘦身打卡日记 ✨</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Chart.js for charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+    <!-- 主容器 -->
+    <div id="app">
+        <!-- 初始化页面 -->
+        <div id="init-page" class="page active">
+            <div class="init-container">
+                <div class="init-header">
+                    <span class="init-emoji">🌸</span>
+                    <h1>瘦身打卡日记</h1>
+                    <p class="init-subtitle">记录每一步变化，遇见更好的自己</p>
+                </div>
+                
+                <div class="init-form">
+                    <div class="form-section">
+                        <h3>基础信息</h3>
+                        <div class="form-group">
+                            <label>身高 (cm)</label>
+                            <input type="number" id="init-height" placeholder="165" min="100" max="250">
+                        </div>
+                        <div class="form-group">
+                            <label>当前体重 (kg)</label>
+                            <input type="number" id="init-weight" placeholder="65" min="30" max="300" step="0.1">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group half">
+                                <label>腰围 (cm)</label>
+                                <input type="number" id="init-waist" placeholder="70" min="40" max="200">
+                            </div>
+                            <div class="form-group half">
+                                <label>臀围 (cm)</label>
+                                <input type="number" id="init-hip" placeholder="90" min="50" max="200">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-section">
+                        <h3>目标设定</h3>
+                        <div class="form-group">
+                            <label>目标体重 (kg)</label>
+                            <input type="number" id="init-target-weight" placeholder="55" min="30" max="300" step="0.1">
+                        </div>
+                        <div class="form-group">
+                            <label>计划天数</label>
+                            <input type="number" id="init-target-days" placeholder="60" min="7" max="365">
+                        </div>
+                    </div>
+                    
+                    <button class="btn-primary btn-large" onclick="completeInit()">
+                        开始我的蜕变之旅 💪
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 主页面 Dashboard -->
+        <div id="dashboard-page" class="page">
+            <!-- 顶部导航 -->
+            <header class="header">
+                <div class="header-left">
+                    <span class="header-emoji">🌸</span>
+                    <span class="header-title">瘦身日记</span>
+                </div>
+                <div class="header-right">
+                    <button class="icon-btn" onclick="showPage('settings-page')">⚙️</button>
+                </div>
+            </header>
+
+            <!-- 主要内容区 -->
+            <main class="main-content">
+                <!-- 目标进度卡片 -->
+                <div class="card progress-card">
+                    <div class="card-header">
+                        <span class="card-icon">🎯</span>
+                        <span class="card-title">目标进度</span>
+                    </div>
+                    <div class="progress-content">
+                        <div class="progress-numbers">
+                            <div class="current">
+                                <span class="label">当前</span>
+                                <span class="value" id="current-weight">--</span>
+                                <span class="unit">kg</span>
+                            </div>
+                            <div class="arrow">→</div>
+                            <div class="target">
+                                <span class="label">目标</span>
+                                <span class="value" id="target-weight">--</span>
+                                <span class="unit">kg</span>
+                            </div>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                            </div>
+                            <span class="progress-text" id="progress-text">0%</span>
+                        </div>
+                        <div class="progress-info">
+                            <span id="weight-lost">已减 0 kg</span>
+                            <span id="weight-remain">还差 0 kg</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 连续打卡卡片 -->
+                <div class="card streak-card">
+                    <div class="card-header">
+                        <span class="card-icon">🔥</span>
+                        <span class="card-title">连续打卡</span>
+                    </div>
+                    <div class="streak-content">
+                        <div class="streak-number">
+                            <span class="number" id="streak-count">0</span>
+                            <span class="unit">天</span>
+                        </div>
+                        <div class="streak-info">
+                            <div class="streak-item">
+                                <span class="label">本月打卡率</span>
+                                <span class="value" id="monthly-rate">0%</span>
+                            </div>
+                            <div class="streak-item">
+                                <span class="label">历史最长</span>
+                                <span class="value" id="longest-streak">0天</span>
+                            </div>
+                        </div>
+                        <div class="streak-message" id="streak-message">
+                            开始你的打卡之旅吧！
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 今日状态 -->
+                <div class="card today-card" id="today-card">
+                    <div class="today-status" id="today-status">
+                        <span class="status-icon">⚠️</span>
+                        <span class="status-text">今天还没打卡哦</span>
+                    </div>
+                </div>
+
+                <!-- 快速打卡按钮 -->
+                <button class="checkin-btn" id="checkin-btn" onclick="showCheckinModal()">
+                    <span class="btn-icon">✨</span>
+                    <span class="btn-text">今日打卡</span>
+                </button>
+
+                <!-- 趋势图表 -->
+                <div class="card chart-card">
+                    <div class="card-header">
+                        <span class="card-icon">📊</span>
+                        <span class="card-title">体重趋势</span>
+                        <div class="chart-tabs">
+                            <button class="chart-tab active" onclick="switchChartPeriod(7)">7天</button>
+                            <button class="chart-tab" onclick="switchChartPeriod(30)">30天</button>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="weight-chart"></canvas>
+                    </div>
+                    <div class="chart-empty" id="chart-empty">
+                        <span class="empty-icon">📈</span>
+                        <span class="empty-text">打卡后查看体重趋势</span>
+                    </div>
+                </div>
+
+                <!-- 本周运动统计 -->
+                <div class="card week-stats-card">
+                    <div class="card-header">
+                        <span class="card-icon">💪</span>
+                        <span class="card-title">本周运动</span>
+                    </div>
+                    <div class="week-stats">
+                        <div class="stat-item">
+                            <span class="stat-value" id="week-count">0</span>
+                            <span class="stat-label">次</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value" id="week-duration">0</span>
+                            <span class="stat-label">分钟</span>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <!-- 底部导航 -->
+            <nav class="bottom-nav">
+                <button class="nav-item active" onclick="showPage('dashboard-page')">
+                    <span class="nav-icon">🏠</span>
+                    <span class="nav-text">首页</span>
+                </button>
+                <button class="nav-item" onclick="showPage('history-page')">
+                    <span class="nav-icon">📅</span>
+                    <span class="nav-text">记录</span>
+                </button>
+                <button class="nav-item" onclick="showPage('analysis-page')">
+                    <span class="nav-icon">📈</span>
+                    <span class="nav-text">分析</span>
+                </button>
+                <button class="nav-item" onclick="showPage('settings-page')">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-text">设置</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- 历史记录页面 -->
+        <div id="history-page" class="page">
+            <header class="header">
+                <div class="header-left">
+                    <span class="header-emoji">📅</span>
+                    <span class="header-title">打卡记录</span>
+                </div>
+            </header>
+            <main class="main-content">
+                <div class="history-list" id="history-list">
+                    <!-- 动态生成 -->
+                </div>
+                <div class="empty-state" id="history-empty">
+                    <span class="empty-icon">📝</span>
+                    <span class="empty-text">还没有打卡记录</span>
+                </div>
+            </main>
+        </div>
+
+        <!-- 分析页面 -->
+        <div id="analysis-page" class="page">
+            <header class="header">
+                <div class="header-left">
+                    <span class="header-emoji">📈</span>
+                    <span class="header-title">趋势分析</span>
+                </div>
+            </header>
+            <main class="main-content">
+                <!-- 运动时长图表 -->
+                <div class="card chart-card">
+                    <div class="card-header">
+                        <span class="card-icon">🏃‍♀️</span>
+                        <span class="card-title">运动时长趋势</span>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="exercise-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- 运动类型统计 -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-icon">🎯</span>
+                        <span class="card-title">运动类型分布</span>
+                    </div>
+                    <div class="type-stats" id="type-stats">
+                        <!-- 动态生成 -->
+                    </div>
+                </div>
+
+                <!-- 周总结 -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-icon">📝</span>
+                        <span class="card-title">本周总结</span>
+                    </div>
+                    <div class="week-summary" id="week-summary">
+                        <!-- 动态生成 -->
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- 设置页面 -->
+        <div id="settings-page" class="page">
+            <header class="header">
+                <div class="header-left">
+                    <span class="header-emoji">⚙️</span>
+                    <span class="header-title">设置</span>
+                </div>
+            </header>
+            <main class="main-content">
+                <!-- 目标设置 -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-icon">🎯</span>
+                        <span class="card-title">目标设置</span>
+                    </div>
+                    <div class="settings-form">
+                        <div class="form-group">
+                            <label>目标体重 (kg)</label>
+                            <input type="number" id="settings-target-weight" min="30" max="300" step="0.1">
+                        </div>
+                        <div class="form-group">
+                            <label>计划天数</label>
+                            <input type="number" id="settings-target-days" min="7" max="365">
+                        </div>
+                        <button class="btn-primary" onclick="saveSettings()">保存设置</button>
+                    </div>
+                </div>
+
+                <!-- 行为目标 -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-icon">📋</span>
+                        <span class="card-title">行为目标</span>
+                    </div>
+                    <div class="settings-form">
+                        <div class="form-group">
+                            <label>每周运动次数</label>
+                            <input type="number" id="settings-weekly-count" min="1" max="14" value="4">
+                        </div>
+                        <div class="form-group">
+                            <label>每次最短时长 (分钟)</label>
+                            <input type="number" id="settings-min-duration" min="10" max="180" value="30">
+                        </div>
+                        <div class="form-group">
+                            <label>每周总时长 (分钟)</label>
+                            <input type="number" id="settings-weekly-duration" min="30" max="1000" value="150">
+                        </div>
+                        <button class="btn-primary" onclick="saveBehaviorGoals()">保存目标</button>
+                    </div>
+                </div>
+
+                <!-- 数据管理 -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-icon">💾</span>
+                        <span class="card-title">数据管理</span>
+                    </div>
+                    <div class="data-actions">
+                        <button class="btn-secondary" onclick="exportData('json')">
+                            导出 JSON
+                        </button>
+                        <button class="btn-secondary" onclick="exportData('csv')">
+                            导出 CSV
+                        </button>
+                        <button class="btn-secondary" onclick="document.getElementById('import-file').click()">
+                            导入数据
+                        </button>
+                        <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+                    </div>
+                </div>
+
+                <!-- 基础信息 -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-icon">👤</span>
+                        <span class="card-title">基础信息</span>
+                    </div>
+                    <div class="settings-form">
+                        <div class="form-group">
+                            <label>身高 (cm)</label>
+                            <input type="number" id="settings-height" min="100" max="250">
+                        </div>
+                        <button class="btn-primary" onclick="saveBasicInfo()">保存</button>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- 打卡弹窗 -->
+        <div id="checkin-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>今日打卡 ✨</h3>
+                    <button class="modal-close" onclick="hideCheckinModal()">×</button>
+                </div>
+                <div class="modal-body">
+                    <!-- 运动记录 -->
+                    <div class="form-section">
+                        <h4>运动记录 <span class="required">*</span></h4>
+                        <div id="exercise-list">
+                            <div class="exercise-item">
+                                <div class="exercise-type">
+                                    <select class="exercise-category" onchange="updateExerciseType(this)">
+                                        <option value="">选择类型</option>
+                                        <option value="游泳">🏊‍♀️ 游泳</option>
+                                        <option value="私教课">👩‍🏫 私教课</option>
+                                        <option value="健身房">🏋️‍♀️ 健身房</option>
+                                        <option value="居家运动">🏠 居家运动</option>
+                                        <option value="其他">📌 其他</option>
+                                    </select>
+                                    <input type="text" class="exercise-detail" placeholder="具体项目（可选）">
+                                </div>
+                                <div class="exercise-duration">
+                                    <input type="number" class="duration-input" placeholder="时长" min="1" max="480">
+                                    <span class="duration-unit">分钟</span>
+                                </div>
+                                <div class="exercise-intensity">
+                                    <select class="intensity-select">
+                                        <option value="low">轻度</option>
+                                        <option value="medium" selected>中等</option>
+                                        <option value="high">高强度</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn-add-exercise" onclick="addExerciseItem()">
+                            + 添加运动
+                        </button>
+                    </div>
+
+                    <!-- 身体数据 -->
+                    <div class="form-section">
+                        <h4>身体数据（可选）</h4>
+                        <div class="form-group">
+                            <label>体重 (kg)</label>
+                            <input type="number" id="checkin-weight" placeholder="今日体重" min="30" max="300" step="0.1">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group half">
+                                <label>腰围 (cm)</label>
+                                <input type="number" id="checkin-waist" placeholder="腰围" min="40" max="200">
+                            </div>
+                            <div class="form-group half">
+                                <label>臀围 (cm)</label>
+                                <input type="number" id="checkin-hip" placeholder="臀围" min="50" max="200">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 备注 -->
+                    <div class="form-section">
+                        <h4>备注（可选）</h4>
+                        <textarea id="checkin-note" placeholder="今天感觉怎么样？" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" onclick="hideCheckinModal()">取消</button>
+                    <button class="btn-primary" onclick="submitCheckin()">完成打卡</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 里程碑庆祝弹窗 -->
+        <div id="milestone-modal" class="modal">
+            <div class="modal-content milestone-content">
+                <div class="milestone-animation">
+                    <div class="confetti"></div>
+                    <div class="milestone-icon" id="milestone-icon">🎉</div>
+                </div>
+                <h3 id="milestone-title">恭喜你！</h3>
+                <p id="milestone-message">你已连续打卡 7 天！</p>
+                <button class="btn-primary" onclick="hideMilestoneModal()">太棒了！</button>
+            </div>
+        </div>
+
+        <!-- 提示消息 -->
+        <div id="toast" class="toast"></div>
+    </div>
+
+    <script src="js/firebase-config.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
