@@ -1011,7 +1011,7 @@
         // 设置超时保护：10秒后无论如何都显示页面
         initTimeout = setTimeout(function() {
             hideLoadingAndShowApp();
-            showToast('加载超时，请检查网络');
+            showToast('加载超时，点击右上角设置同步数据');
         }, 10000);
         
         // 先从本地缓存加载
@@ -1023,10 +1023,16 @@
             return;
         }
         
-        // 没有缓存，从云端加载
-        loadingText.textContent = '首次加载中...';
+        // 没有缓存，尝试从云端加载
+        loadingText.textContent = '连接服务器...';
         initFromCloud(loadingPage, loadingText, 0);
     }
+    
+    // 手动同步数据（用户可以在设置页面点击）
+    window.manualSync = function() {
+        showToast('正在同步数据...');
+        syncFromCloud();
+    };
     
     function initFromCloud(loadingPage, loadingText, retryCount) {
         var MAX_RETRIES = 2;
@@ -1037,9 +1043,7 @@
             loadUserData(function(success) {
                 if (success) {
                     loadingText.textContent = state.nickname + ' 准备好了！';
-                    setTimeout(function() {
-                        hideLoadingAndShowApp();
-                    }, 100);
+                    setTimeout(hideLoadingAndShowApp, 100);
                 } else {
                     if (retryCount < MAX_RETRIES) {
                         loadingText.textContent = '加载失败，重试中... (' + (retryCount + 1) + '/' + MAX_RETRIES + ')';
@@ -1048,7 +1052,7 @@
                         }, 1000);
                     } else {
                         hideLoadingAndShowApp();
-                        showToast('网络连接失败，数据将在网络恢复后同步');
+                        showToast('网络连接失败，点击右上角设置同步数据');
                     }
                 }
             });
@@ -1058,13 +1062,14 @@
             state.userId = savedUserId;
             proceed();
         } else {
-            firebaseAuth.signInAnonymously().then(function() {
-                state.userId = firebaseAuth.getUserId();
+            firebaseAuth.signInAnonymously().then(function(user) {
+                state.userId = user.uid;
                 if (localStorageAvailable) {
                     localStorage.setItem('fitness_tracker_user_id', state.userId);
                 }
                 proceed();
             }).catch(function(error) {
+                console.error('登录失败:', error);
                 if (retryCount < MAX_RETRIES) {
                     loadingText.textContent = '连接失败，重试中... (' + (retryCount + 1) + '/' + MAX_RETRIES + ')';
                     setTimeout(function() {
