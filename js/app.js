@@ -1063,28 +1063,39 @@
         if (hasCache) {
             // 有缓存，立即显示页面
             loadingText.textContent = `${state.nickname} 准备好了！`;
-            setTimeout(() => {
+            setTimeout(function() {
                 loadingPage.classList.add('hidden');
             }, 100);
             showPage('dashboard-page');
-            await initDashboard();
+            initDashboard();
             
             // 后台同步云端数据（不阻塞显示）
             syncFromCloud();
-        } else {
-            // 没有缓存，需要从云端加载
-            loadingText.textContent = '首次加载中...';
+            return;
+        }
+        
+        // 没有缓存，需要从云端加载
+        loadingText.textContent = '首次加载中...';
+        try {
             await initFromCloud(loadingPage, loadingText);
+        } catch (error) {
+            console.error('初始化失败:', error);
+            // 即使失败也显示页面
+            loadingPage.classList.add('hidden');
+            showPage('dashboard-page');
+            initDashboard();
+            showToast('网络连接失败，数据将在网络恢复后同步');
         }
     }
     
     // 从云端初始化（带重试）
-    async function initFromCloud(loadingPage, loadingText, retryCount = 0) {
-        const MAX_RETRIES = 3;
+    async function initFromCloud(loadingPage, loadingText, retryCount) {
+        retryCount = retryCount || 0;
+        var MAX_RETRIES = 3;
         
         try {
             // 尝试从 localStorage 获取已保存的 userId
-            let savedUserId = localStorage.getItem('fitness_tracker_user_id');
+            var savedUserId = localStorage.getItem('fitness_tracker_user_id');
             
             if (savedUserId) {
                 state.userId = savedUserId;
@@ -1096,42 +1107,43 @@
             }
 
             // 加载用户数据
-            const success = await loadUserData();
+            var success = await loadUserData();
             
-            if (!success && retryCount < MAX_RETRIES) {
-                loadingText.textContent = `加载失败，重试中... (${retryCount + 1}/${MAX_RETRIES})`;
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                return initFromCloud(loadingPage, loadingText, retryCount + 1);
+            if (!success) {
+                throw new Error('加载数据失败');
             }
 
             // 更新加载文字
             loadingText.textContent = `${state.nickname} 准备好了！`;
             
             // 隐藏加载页面
-            setTimeout(() => {
+            setTimeout(function() {
                 loadingPage.classList.add('hidden');
             }, 100);
             
             showPage('dashboard-page');
-            await initDashboard();
+            initDashboard();
+            
         } catch (error) {
             console.error('初始化失败:', error);
             
             if (retryCount < MAX_RETRIES) {
                 loadingText.textContent = `连接失败，重试中... (${retryCount + 1}/${MAX_RETRIES})`;
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                await new Promise(function(resolve) {
+                    setTimeout(resolve, 1000);
+                });
                 return initFromCloud(loadingPage, loadingText, retryCount + 1);
             }
             
-            loadingPage.classList.add('hidden');
-            showToast('网络连接失败，请检查网络后刷新页面');
+            // 重试次数用完，抛出错误让外层处理
+            throw error;
         }
     }
     
     // 后台同步云端数据
     async function syncFromCloud() {
         try {
-            let savedUserId = localStorage.getItem('fitness_tracker_user_id');
+            var savedUserId = localStorage.getItem('fitness_tracker_user_id');
             
             if (!savedUserId) {
                 await firebaseAuth.signInAnonymously();
@@ -1142,18 +1154,23 @@
             state.userId = savedUserId;
             
             // 从云端加载数据
-            const doc = await db.collection('users').doc(state.userId).get();
+            var doc = await db.collection('users').doc(state.userId).get();
             if (doc.exists) {
-                const cloudData = doc.data();
+                var cloudData = doc.data();
                 state.userData = cloudData;
-                state.settings = { ...state.settings, ...cloudData.settings };
-                state.streak = { ...state.streak, ...cloudData.streak };
+                state.settings = Object.assign({}, state.settings, cloudData.settings);
+                state.streak = Object.assign({}, state.streak, cloudData.streak);
                 state.nickname = cloudData.nickname || '小可爱';
                 
                 // 加载记录
-                const recordsSnapshot = await db.collection('users').doc(state.userId)
+                var recordsSnapshot = await db.collection('users').doc(state.userId)
                     .collection('records').orderBy('date', 'desc').limit(100).get();
-                state.records = recordsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                state.records = recordsSnapshot.docs.map(function(doc) {
+                    return { id: doc.id, data: doc.data() };
+                });
+                state.records = state.records.map(function(item) {
+                    return Object.assign({ id: item.id }, item.data);
+                });
                 
                 // 更新本地缓存
                 saveToCache();
