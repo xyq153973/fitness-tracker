@@ -990,19 +990,35 @@
     };
 
     // ==================== 应用初始化 ====================
+    var initTimeout = null;
+    var appInitialized = false;
+    
+    function hideLoadingAndShowApp() {
+        if (appInitialized) return;
+        appInitialized = true;
+        if (initTimeout) clearTimeout(initTimeout);
+        
+        var loadingPage = document.getElementById('loading-page');
+        loadingPage.classList.add('hidden');
+        showPage('dashboard-page');
+        initDashboard();
+    }
+    
     function initApp() {
         var loadingPage = document.getElementById('loading-page');
         var loadingText = loadingPage.querySelector('.loading-text');
+        
+        // 设置超时保护：10秒后无论如何都显示页面
+        initTimeout = setTimeout(function() {
+            hideLoadingAndShowApp();
+            showToast('加载超时，请检查网络');
+        }, 10000);
         
         // 先从本地缓存加载
         var hasCache = loadFromCache();
         if (hasCache) {
             loadingText.textContent = state.nickname + ' 准备好了！';
-            setTimeout(function() {
-                loadingPage.classList.add('hidden');
-            }, 100);
-            showPage('dashboard-page');
-            initDashboard();
+            setTimeout(hideLoadingAndShowApp, 100);
             syncFromCloud();
             return;
         }
@@ -1013,7 +1029,7 @@
     }
     
     function initFromCloud(loadingPage, loadingText, retryCount) {
-        var MAX_RETRIES = 3;
+        var MAX_RETRIES = 2;
         
         var savedUserId = localStorageAvailable ? localStorage.getItem('fitness_tracker_user_id') : null;
         
@@ -1022,10 +1038,8 @@
                 if (success) {
                     loadingText.textContent = state.nickname + ' 准备好了！';
                     setTimeout(function() {
-                        loadingPage.classList.add('hidden');
+                        hideLoadingAndShowApp();
                     }, 100);
-                    showPage('dashboard-page');
-                    initDashboard();
                 } else {
                     if (retryCount < MAX_RETRIES) {
                         loadingText.textContent = '加载失败，重试中... (' + (retryCount + 1) + '/' + MAX_RETRIES + ')';
@@ -1033,9 +1047,7 @@
                             initFromCloud(loadingPage, loadingText, retryCount + 1);
                         }, 1000);
                     } else {
-                        loadingPage.classList.add('hidden');
-                        showPage('dashboard-page');
-                        initDashboard();
+                        hideLoadingAndShowApp();
                         showToast('网络连接失败，数据将在网络恢复后同步');
                     }
                 }
@@ -1059,9 +1071,7 @@
                         initFromCloud(loadingPage, loadingText, retryCount + 1);
                     }, 1000);
                 } else {
-                    loadingPage.classList.add('hidden');
-                    showPage('dashboard-page');
-                    initDashboard();
+                    hideLoadingAndShowApp();
                     showToast('网络连接失败，请检查网络');
                 }
             });
