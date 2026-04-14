@@ -92,10 +92,21 @@
         }, 2500);
     }
 
+    // 检测 localStorage 是否可用（iOS Safari 私密模式下不可用）
+    var localStorageAvailable = false;
+    try {
+        localStorage.setItem('test', 'test');
+        localStorage.removeItem('test');
+        localStorageAvailable = true;
+    } catch (e) {
+        localStorageAvailable = false;
+    }
+
     // ==================== 本地缓存 ====================
     var CACHE_KEY = 'fitness_tracker_cache';
     
     function saveToCache() {
+        if (!localStorageAvailable) return;
         try {
             var cacheData = {
                 nickname: state.nickname,
@@ -110,6 +121,7 @@
     }
     
     function loadFromCache() {
+        if (!localStorageAvailable) return false;
         try {
             var cached = localStorage.getItem(CACHE_KEY);
             if (cached) {
@@ -1003,7 +1015,7 @@
     function initFromCloud(loadingPage, loadingText, retryCount) {
         var MAX_RETRIES = 3;
         
-        var savedUserId = localStorage.getItem('fitness_tracker_user_id');
+        var savedUserId = localStorageAvailable ? localStorage.getItem('fitness_tracker_user_id') : null;
         
         var proceed = function() {
             loadUserData(function(success) {
@@ -1036,7 +1048,9 @@
         } else {
             firebaseAuth.signInAnonymously().then(function() {
                 state.userId = firebaseAuth.getUserId();
-                localStorage.setItem('fitness_tracker_user_id', state.userId);
+                if (localStorageAvailable) {
+                    localStorage.setItem('fitness_tracker_user_id', state.userId);
+                }
                 proceed();
             }).catch(function(error) {
                 if (retryCount < MAX_RETRIES) {
@@ -1055,7 +1069,7 @@
     }
     
     function syncFromCloud() {
-        var savedUserId = localStorage.getItem('fitness_tracker_user_id');
+        var savedUserId = localStorageAvailable ? localStorage.getItem('fitness_tracker_user_id') : null;
         
         var sync = function() {
             db.collection('users').doc(state.userId).get().then(function(doc) {
@@ -1103,7 +1117,9 @@
         } else {
             firebaseAuth.signInAnonymously().then(function() {
                 state.userId = firebaseAuth.getUserId();
-                localStorage.setItem('fitness_tracker_user_id', state.userId);
+                if (localStorageAvailable) {
+                    localStorage.setItem('fitness_tracker_user_id', state.userId);
+                }
                 sync();
             });
         }
