@@ -14,20 +14,15 @@ const firebaseConfig = {
 // 初始化 Firebase
 firebase.initializeApp(firebaseConfig);
 
-// 获取 Firestore 实例并启用离线持久化
+// 获取 Firestore 和 Auth 实例
 const db = firebase.firestore();
-
-// 启用离线持久化（让应用在网络不好时也能工作）
-db.enablePersistence({ synchronizeTabs: true })
-    .catch(err => {
-        if (err.code === 'failed-precondition') {
-            console.warn('多个标签页打开，离线持久化可能不可用');
-        } else if (err.code === 'unimplemented') {
-            console.warn('浏览器不支持离线持久化');
-        }
-    });
-
 const auth = firebase.auth();
+
+// 尝试启用离线持久化（不阻塞初始化）
+db.enablePersistence({ synchronizeTabs: true }).catch(function(err) {
+    // 忽略错误，不影响正常使用
+    console.log('离线持久化不可用:', err.message);
+});
 
 // 使用匿名登录
 async function signInAnonymously() {
